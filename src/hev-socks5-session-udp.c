@@ -90,7 +90,11 @@ hev_socks5_session_udp_fwd_f (HevSocks5SessionUDP *self)
     hev_free (frame);
     pbuf_free (buf);
     self->frames--;
-    if (res <= 0) {
+    if (res > 0) { // Data successfully sent
+        self->alive |= HEV_SOCKS5_SESSION_UDP_ALIVE_F;
+        hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout()); // Reset timeout
+        return 0; // Successful send, continue loop in caller
+    } else { // res <= 0, error or connection closed
         if (res < -1) { // A more serious error for any UDP type
             self->alive &= ~HEV_SOCKS5_SESSION_UDP_ALIVE_F;
             // For UDP_IN_UDP or UDP_IN_TCP, a serious error means we force the timeout.
@@ -104,14 +108,9 @@ hev_socks5_session_udp_fwd_f (HevSocks5SessionUDP *self)
         // we let the existing read-write-timeout mechanism handle it.
 
         LOG_D ("%p socks5 session udp fwd f send", self);
-        // Ensure res is set to -1 to indicate failure for the main loop,
-        // as the original code did in the outer if (res <= 0)
-        res = -1;
+        // The function must return -1 to stop the caller's loop on error.
+        return -1; // Error path, stop loop in caller
     }
-
-    self->alive |= HEV_SOCKS5_SESSION_UDP_ALIVE_F;
-
-    return 0;
 }
 
 static int
@@ -179,14 +178,15 @@ hev_socks5_session_udp_fwd_b (HevSocks5SessionUDP *self)
     hev_task_mutex_unlock (self->mutex);
     pbuf_free (buf);
 
-    if (err != ERR_OK) {
+    if (err == ERR_OK) { // Data successfully sent to SOCKS client
+        self->alive |= HEV_SOCKS5_SESSION_UDP_ALIVE_B;
+        hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout()); // Reset timeout
+        return 0; // Successful send, continue loop in caller (splice_task_entry)
+    } else { // err != ERR_OK
         LOG_D ("%p socks5 session udp fwd b send", self);
-        return -1;
+        self->alive &= ~HEV_SOCKS5_SESSION_UDP_ALIVE_B; // Mark this direction as not alive
+        return -1; // Error path, stop loop in caller
     }
-
-    self->alive |= HEV_SOCKS5_SESSION_UDP_ALIVE_B;
-
-    return 0;
 }
 
 static void

@@ -91,14 +91,21 @@ hev_socks5_session_udp_fwd_f (HevSocks5SessionUDP *self)
     pbuf_free (buf);
     self->frames--;
     if (res <= 0) {
-        if (res < -1) {
+        if (res < -1) { // A more serious error for any UDP type
             self->alive &= ~HEV_SOCKS5_SESSION_UDP_ALIVE_F;
-            if (self->alive && hev_socks5_get_timeout (HEV_SOCKS5 (self)))
-                return 0;
-        }
-        if (HEV_SOCKS5 (self)->type == HEV_SOCKS5_TYPE_UDP_IN_TCP)
+            // For UDP_IN_UDP or UDP_IN_TCP, a serious error means we force the timeout.
             hev_socks5_set_timeout (HEV_SOCKS5 (self), 0);
+        } else if (HEV_SOCKS5 (self)->type == HEV_SOCKS5_TYPE_UDP_IN_TCP) {
+            // For UDP_IN_TCP, any non-serious error (res == 0 or res == -1 on send)
+            // also forces timeout.
+            hev_socks5_set_timeout (HEV_SOCKS5 (self), 0);
+        }
+        // For UDP_IN_UDP with non-serious errors (res == 0 or res == -1),
+        // we let the existing read-write-timeout mechanism handle it.
+
         LOG_D ("%p socks5 session udp fwd f send", self);
+        // Ensure res is set to -1 to indicate failure for the main loop,
+        // as the original code did in the outer if (res <= 0)
         res = -1;
     }
 
@@ -139,15 +146,19 @@ hev_socks5_session_udp_fwd_b (HevSocks5SessionUDP *self)
 
     res = hev_socks5_udp_recvfrom (udp, buf->payload, buf->len, saddr);
     if (res <= 0) {
-        if (res < -1) {
+        if (res < -1) { // A more serious error for any UDP type
             self->alive &= ~HEV_SOCKS5_SESSION_UDP_ALIVE_B;
-            if (self->alive && hev_socks5_get_timeout (HEV_SOCKS5 (self))) {
-                pbuf_free (buf);
-                return 0;
-            }
-        }
-        if (HEV_SOCKS5 (self)->type == HEV_SOCKS5_TYPE_UDP_IN_TCP)
+            // For UDP_IN_UDP or UDP_IN_TCP, a serious error means we force the timeout.
             hev_socks5_set_timeout (HEV_SOCKS5 (self), 0);
+        } else if (HEV_SOCKS5 (self)->type == HEV_SOCKS5_TYPE_UDP_IN_TCP) {
+            // For UDP_IN_TCP, any non-serious error (res == 0 or res == -1)
+            // also forces timeout because the underlying TCP connection state is clearer.
+            hev_socks5_set_timeout (HEV_SOCKS5 (self), 0);
+        }
+        // For UDP_IN_UDP with non-serious errors (res == 0 or res == -1),
+        // we let the existing read-write-timeout mechanism handle it.
+        // This was the implicit behavior before and is not the source of the reported bug.
+
         LOG_D ("%p socks5 session udp fwd b recv", self);
         pbuf_free (buf);
         return -1;

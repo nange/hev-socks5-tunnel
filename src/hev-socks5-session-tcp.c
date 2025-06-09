@@ -45,61 +45,126 @@ tcp_splice_f (HevSocks5SessionTCP *self)
     }
 
     s = writev (HEV_SOCKS5 (self)->fd, iov, i);
-    if (0 >= s) {
-        if ((0 > s) && (EAGAIN == errno))
-            return 0;
-        return -1;
+
+    if (s > 0) { // Successful write
+        hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout()); // Reset timeout
+
+        hev_task_mutex_lock (self->mutex);
+        self->queue = pbuf_free_header (self->queue, s);
+        if (self->pcb)
+            tcp_recved (self->pcb, s);
+        hev_task_mutex_unlock (self->mutex);
+
+        if (!self->queue)
+            return 0; // All data from queue sent
+        return 1;     // More data remains in queue
+    } else { // s <= 0: Error or EOF from local client socket
+        if (s < 0 && errno == EAGAIN) {
+            return 0; // Not an error to terminate, try again
+        }
+        // s == 0 (client closed sending side/socket closed) OR s < 0 (other error)
+        hev_socks5_set_timeout(HEV_SOCKS5(self), 0); // Force rapid timeout
+        return -1; // Terminate this direction
     }
-
-    hev_task_mutex_lock (self->mutex);
-    self->queue = pbuf_free_header (self->queue, s);
-    if (self->pcb)
-        tcp_recved (self->pcb, s);
-    hev_task_mutex_unlock (self->mutex);
-    if (!self->queue)
-        return 0;
-
-    return 1;
 }
 
 static int
 tcp_splice_b (HevSocks5SessionTCP *self)
 {
     struct iovec iov[2];
-    err_t err = ERR_OK;
+    err_t err = ERR_OK; // Holds error status for TCP operations
     int iovlen;
-    ssize_t s;
+    ssize_t s_read; // Result of readv from local client socket
 
+    // Check for space in the ring buffer to write data from the client
     iovlen = hev_ring_buffer_writing (self->buffer, iov);
-    if (iovlen <= 0)
-        return 0;
-
-    s = readv (HEV_SOCKS5 (self)->fd, iov, iovlen);
-    if (0 >= s) {
-        if ((0 > s) && (EAGAIN == errno))
-            return 0;
-        iovlen = hev_ring_buffer_reading (self->buffer, iov);
-        if (iovlen <= 0)
-            return -1;
+    if (iovlen <= 0) {
+        return 0; // No space in ring buffer, yield and try later
     }
-    hev_ring_buffer_write_finish (self->buffer, s);
 
-    hev_task_mutex_lock (self->mutex);
-    if (self->pcb) {
-        int i;
-        iovlen = hev_ring_buffer_reading (self->buffer, iov);
-        for (i = 0, s = 0; i < iovlen; i++) {
-            err |= tcp_write (self->pcb, iov[i].iov_base, iov[i].iov_len, 0);
-            s += iov[i].iov_len;
+    s_read = readv (HEV_SOCKS5 (self)->fd, iov, iovlen);
+
+    if (s_read > 0) { // Successfully read data from the client socket
+        hev_ring_buffer_write_finish (self->buffer, s_read); // Mark data as written to ring buffer
+        hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout()); // Reset session timeout
+    } else if (s_read == 0) { // EOF received from the client socket
+        // Client has closed its sending side. No more data will be received.
+        // Check if there's any data left in the ring buffer to send to the remote server.
+        iovlen = hev_ring_buffer_reading (self->buffer, iov); // Peek at buffer
+        if (iovlen <= 0) { // Ring buffer is empty, and client has signaled EOF.
+            hev_socks5_set_timeout(HEV_SOCKS5(self), 0); // Force rapid timeout.
+            return -1; // Terminate this forwarding direction (client to remote).
         }
-        hev_ring_buffer_read_finish (self->buffer, s);
-        err |= tcp_output (self->pcb);
+        // If iovlen > 0, buffer has data to flush to remote. Proceed.
+        // Timeout is not forced to 0 yet, to allow flushing.
+        // hev_ring_buffer_write_finish is not called because s_read is 0.
+    } else { // s_read < 0, an error occurred reading from the client socket
+        if (errno == EAGAIN) {
+            return 0; // EAGAIN is not a fatal error; try reading again later.
+        }
+        // For other read errors, this direction is likely compromised.
+        hev_socks5_set_timeout(HEV_SOCKS5(self), 0); // Force rapid timeout.
+        // Check if there's any data left in the ring buffer to send to the remote.
+        iovlen = hev_ring_buffer_reading (self->buffer, iov); // Peek at buffer
+        if (iovlen <= 0) { // Ring buffer is empty, and client socket read error.
+            return -1; // Terminate this forwarding direction.
+        }
+        // If iovlen > 0, buffer has data to flush. Proceed. Timeout already set to 0.
+        // hev_ring_buffer_write_finish is not called because s_read is < 0.
+    }
+
+    // At this point:
+    // - Data might have been read into the ring buffer (s_read > 0, timeout reset).
+    // - Client might have EOF'd (s_read == 0), but buffer might still contain data to send.
+    // - A read error might have occurred (s_read < 0, not EAGAIN), timeout set to 0, but buffer might still contain data.
+
+    size_t actual_bytes_queued_this_call = 0; // Track bytes successfully queued to lwIP TCP
+    hev_task_mutex_lock (self->mutex);
+    if (self->pcb) { // If the remote TCP connection (pcb) is still valid
+        int i;
+        iovlen = hev_ring_buffer_reading (self->buffer, iov); // Get data segments from ring buffer
+
+        size_t total_bytes_attempted_from_buffer = 0;
+        for (i = 0; i < iovlen; i++) {
+            // Use TCP_WRITE_FLAG_COPY for safety, as data is in a ring buffer.
+            err_t current_write_err = tcp_write (self->pcb, iov[i].iov_base, iov[i].iov_len, TCP_WRITE_FLAG_COPY);
+            if (current_write_err == ERR_OK) {
+                 actual_bytes_queued_this_call += iov[i].iov_len; // Count successfully queued bytes
+            }
+            err |= current_write_err; // Accumulate any errors from tcp_write
+            total_bytes_attempted_from_buffer += iov[i].iov_len; // Sum of all bytes we tried to write from buffer segments
+        }
+        // Advance the ring buffer's read pointer by the total amount of data segments processed.
+        // This matches the original logic of consuming all read iov segments from the buffer per call.
+        hev_ring_buffer_read_finish (self->buffer, total_bytes_attempted_from_buffer);
+
+        if (err == ERR_OK) { // If all tcp_write calls were successful
+            err |= tcp_output (self->pcb); // Try to send the queued data
+        }
+
+        // If data was successfully queued to TCP and no errors occurred in TCP operations this round
+        if (err == ERR_OK && actual_bytes_queued_this_call > 0) {
+            hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout()); // Reset session timeout
+        }
     }
     hev_task_mutex_unlock (self->mutex);
-    if (!self->pcb || (err != ERR_OK))
-        return -1;
 
-    return 1;
+    // Check for errors from TCP operations or if PCB was lost
+    if (!self->pcb || (err != ERR_OK)) {
+        if (err != ERR_OK) { // If there was a TCP error (write or output)
+             hev_socks5_set_timeout(HEV_SOCKS5(self), 0); // Force rapid timeout
+        }
+        return -1; // Terminate this forwarding direction.
+    }
+
+    // Determine return value based on activity:
+    // Return 1 if progress was made (data read from client or data sent to remote).
+    // Return 0 if no progress but no fatal error (e.g., EAGAIN already handled, or buffer was empty for writing).
+    if (s_read > 0 || actual_bytes_queued_this_call > 0) {
+        return 1; // Progress was made.
+    }
+
+    return 0; // No specific progress, but no immediate error to terminate.
 }
 
 static err_t
@@ -287,6 +352,8 @@ hev_socks5_session_tcp_construct (HevSocks5SessionTCP *self,
     self->pcb = pcb;
     self->mutex = mutex;
     self->data.self = self;
+
+    hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout());
 
     return 0;
 }

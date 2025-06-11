@@ -21,7 +21,7 @@ hev_socks5_session_run (HevSocks5Session *self)
 {
     HevSocks5SessionIface *iface;
     HevConfigServer *srv;
-    int original_connect_timeout;
+    int connect_timeout;
     int dns_timeout_ms;
     int read_write_timeout_ms; // Renamed for clarity from 'read_write_timeout'
     int res;
@@ -29,22 +29,20 @@ hev_socks5_session_run (HevSocks5Session *self)
     LOG_D ("%p socks5 session run", self);
 
     srv = hev_config_get_socks5_server ();
-    original_connect_timeout = hev_config_get_misc_connect_timeout ();
+    connect_timeout = hev_config_get_misc_connect_timeout ();
     dns_timeout_ms = hev_config_get_misc_dns_timeout (); // New
     read_write_timeout_ms = hev_config_get_misc_read_write_timeout ();
 
     // Determine actual timeout for the connect call
-    int current_connect_timeout = original_connect_timeout;
     if (hev_utils_is_hostname(srv->addr)) { // New check
-        current_connect_timeout = dns_timeout_ms;
+        read_write_timeout_ms = dns_timeout_ms;
         LOG_D ("%p socks5 session using DNS timeout %dms for server %s", self, dns_timeout_ms, srv->addr);
-    } else {
-        LOG_D ("%p socks5 session using connect timeout %dms for server %s", self, original_connect_timeout, srv->addr);
     }
 
-    hev_socks5_set_timeout(HEV_SOCKS5(self), current_connect_timeout); // Use determined timeout
+    hev_socks5_set_timeout(HEV_SOCKS5(self), connect_timeout); // Use determined timeout
 
     res = hev_socks5_client_connect(HEV_SOCKS5_CLIENT(self), srv->addr, srv->port);
+
     if (res < 0) {
         LOG_E ("%p socks5 session connect to %s failed", self, srv->addr); // Enhanced log
         return;

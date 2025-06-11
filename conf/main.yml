@@ -32,20 +32,21 @@ socks5:
   # Socket mark
 # mark: 0
 
-#misc:
-   # task stack size (bytes)
-#  task-stack-size: 86016
-   # tcp buffer size (bytes)
+misc:
+  # task stack size (bytes)
+  task-stack-size: 131072
+  # tcp buffer size (bytes)
 #  tcp-buffer-size: 65536
-   # connect timeout (ms)
-#  connect-timeout: 5000
-   # read-write timeout (ms)
-#  read-write-timeout: 60000
-   # stdout, stderr or file-path
-#  log-file: stderr
-   # debug, info, warn or error
-#  log-level: warn
-   # If present, run as a daemon with this pid file
-#  pid-file: /run/hev-socks5-tunnel.pid
-   # If present, set rlimit nofile; else use default value
+  # connect timeout (ms)
+  connect-timeout: 5000 # milliseconds
+  # read-write timeout (ms)
+  read-write-timeout: 60000 # milliseconds
+  dns-timeout: 5000 # milliseconds, for resolving SOCKS5 server hostname
+  # stdout, stderr or file-path
+#  log-file: /var/log/hev-socks5-tunnel.log
+  # debug, info, warn or error
+  log-level: warn # debug, info, warn, error
+  # If present, run as a daemon with this pid file
+  pid-file: /var/run/hev-socks5-tunnel.pid
+  # If present, set rlimit nofile; else use default value
 #  limit-nofile: 65535

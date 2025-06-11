@@ -13,6 +13,7 @@
 #include <lwip/ip_addr.h>
 #include <netinet/in.h>
 
+int hev_utils_is_hostname (const char *address_string);
 void run_as_daemon (const char *pid_file);
 int set_limit_nofile (int limit_nofile);
 int set_sock_mark (int fd, unsigned int mark);

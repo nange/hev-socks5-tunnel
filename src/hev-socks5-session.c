@@ -12,6 +12,7 @@
 #include "hev-logger.h"
 #include "hev-config.h"
 #include "hev-socks5-client.h"
+#include "misc/hev-utils.h"
 
 #include "hev-socks5-session.h"
 
@@ -20,26 +21,38 @@ hev_socks5_session_run (HevSocks5Session *self)
 {
     HevSocks5SessionIface *iface;
     HevConfigServer *srv;
-    int read_write_timeout;
-    int connect_timeout;
+    int original_connect_timeout;
+    int dns_timeout_ms;
+    int read_write_timeout_ms; // Renamed for clarity from 'read_write_timeout'
     int res;
 
     LOG_D ("%p socks5 session run", self);
 
     srv = hev_config_get_socks5_server ();
-    connect_timeout = hev_config_get_misc_connect_timeout ();
-    read_write_timeout = hev_config_get_misc_read_write_timeout ();
+    original_connect_timeout = hev_config_get_misc_connect_timeout ();
+    dns_timeout_ms = hev_config_get_misc_dns_timeout (); // New
+    read_write_timeout_ms = hev_config_get_misc_read_write_timeout ();
 
-    hev_socks5_set_timeout (HEV_SOCKS5 (self), connect_timeout);
+    // Determine actual timeout for the connect call
+    int current_connect_timeout = original_connect_timeout;
+    if (hev_utils_is_hostname(srv->addr)) { // New check
+        current_connect_timeout = dns_timeout_ms;
+        LOG_D ("%p socks5 session using DNS timeout %dms for server %s", self, dns_timeout_ms, srv->addr);
+    } else {
+        LOG_D ("%p socks5 session using connect timeout %dms for server %s", self, original_connect_timeout, srv->addr);
+    }
 
-    res = hev_socks5_client_connect (HEV_SOCKS5_CLIENT (self), srv->addr,
-                                     srv->port);
+    hev_socks5_set_timeout(HEV_SOCKS5(self), current_connect_timeout); // Use determined timeout
+
+    res = hev_socks5_client_connect(HEV_SOCKS5_CLIENT(self), srv->addr, srv->port);
     if (res < 0) {
-        LOG_E ("%p socks5 session connect", self);
+        LOG_E ("%p socks5 session connect to %s failed", self, srv->addr); // Enhanced log
         return;
     }
 
-    hev_socks5_set_timeout (HEV_SOCKS5 (self), read_write_timeout);
+    // IMPORTANT: Restore timeout for subsequent operations (handshake, etc.)
+    // The original code sets read_write_timeout here. This is correct.
+    hev_socks5_set_timeout(HEV_SOCKS5(self), read_write_timeout_ms);
 
     if (srv->user && srv->pass) {
         hev_socks5_client_set_auth (HEV_SOCKS5_CLIENT (self), srv->user,
@@ -49,7 +62,7 @@ hev_socks5_session_run (HevSocks5Session *self)
 
     res = hev_socks5_client_handshake (HEV_SOCKS5_CLIENT (self), srv->pipeline);
     if (res < 0) {
-        LOG_E ("%p socks5 session handshake", self);
+        LOG_E ("%p socks5 session handshake with %s failed", self, srv->addr); // Enhanced log
         return;
     }
 

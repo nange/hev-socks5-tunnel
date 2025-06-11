@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/resource.h>
+ #include <arpa/inet.h> // For inet_pton
 
 #if defined(__APPLE__)
 #include <Availability.h>
@@ -113,4 +114,27 @@ sock_to_lwip_addr (const struct sockaddr *addr, ip_addr_t *ip, u16_t *port)
     }
 
     return 0;
+}
+
+int
+hev_utils_is_hostname (const char *address_string)
+{
+    struct in_addr ipv4_addr;
+    struct in6_addr ipv6_addr;
+
+    if (NULL == address_string) {
+        return 0; // Or handle error appropriately, but for this context, NULL isn't a hostname.
+    }
+
+    // Check for IPv4
+    if (inet_pton (AF_INET, address_string, &ipv4_addr) == 1) {
+        return 0; // It's an IPv4 address
+    }
+
+    // Check for IPv6
+    if (inet_pton (AF_INET6, address_string, &ipv6_addr) == 1) {
+        return 0; // It's an IPv6 address
+    }
+
+    return 1; // Not an IPv4 or IPv6 address, so assume it's a hostname
 }

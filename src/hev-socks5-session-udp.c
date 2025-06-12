@@ -28,6 +28,8 @@
 
 #include "hev-socks5-session-udp.h"
 
+static int udp_read_write_timeout = 30000;
+
 typedef struct _HevSocks5UDPFrame HevSocks5UDPFrame;
 
 struct _HevSocks5UDPFrame
@@ -92,7 +94,7 @@ hev_socks5_session_udp_fwd_f (HevSocks5SessionUDP *self)
     self->frames--;
     if (res > 0) { // Data successfully sent
         self->alive |= HEV_SOCKS5_SESSION_UDP_ALIVE_F;
-        hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout()/2); // Reset timeout
+        hev_socks5_set_timeout(HEV_SOCKS5(self), udp_read_write_timeout); // Reset timeout
         return 0; // Successful send, continue loop in caller
     } else { // res <= 0, error or connection closed
         if (res < -1) { // A more serious error for any UDP type
@@ -180,7 +182,7 @@ hev_socks5_session_udp_fwd_b (HevSocks5SessionUDP *self)
 
     if (err == ERR_OK) { // Data successfully sent to SOCKS client
         self->alive |= HEV_SOCKS5_SESSION_UDP_ALIVE_B;
-        hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout()/2); // Reset timeout
+        hev_socks5_set_timeout(HEV_SOCKS5(self), udp_read_write_timeout); // Reset timeout
         return 0; // Successful send, continue loop in caller (splice_task_entry)
     } else { // err != ERR_OK
         LOG_D ("%p socks5 session udp fwd b send", self);
@@ -368,13 +370,13 @@ hev_socks5_session_udp_construct (HevSocks5SessionUDP *self,
 
     HEV_OBJECT (self)->klass = HEV_SOCKS5_SESSION_UDP_TYPE;
 
-    hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout()/2);
-
     udp_recv (pcb, udp_recv_handler, self);
 
     self->pcb = pcb;
     self->mutex = mutex;
     self->data.self = self;
+
+    hev_socks5_set_timeout(HEV_SOCKS5(self), udp_read_write_timeout);
 
     return 0;
 }

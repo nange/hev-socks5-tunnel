@@ -353,8 +353,6 @@ hev_socks5_session_tcp_construct (HevSocks5SessionTCP *self,
     self->mutex = mutex;
     self->data.self = self;
 
-    hev_socks5_set_timeout(HEV_SOCKS5(self), hev_config_get_misc_read_write_timeout());
-
     return 0;
 }
 

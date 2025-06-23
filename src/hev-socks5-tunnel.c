@@ -8,8 +8,10 @@
  */
 
 #include <errno.h>
+#include <assert.h>
 #include <signal.h>
 #include <string.h>
+#include <sys/ioctl.h>
 
 #include <lwip/tcp.h>
 #include <lwip/udp.h>
@@ -21,7 +23,6 @@
 
 #include <hev-task.h>
 #include <hev-task-io.h>
-#include <hev-task-io-pipe.h>
 #include <hev-task-mutex.h>
 #include <hev-task-system.h>
 #include <hev-memory-allocator.h>
@@ -143,6 +144,9 @@ tcp_accept_handler (void *arg, struct tcp_pcb *pcb, err_t err)
     if (err != ERR_OK)
         return err;
 
+    if (!run)
+        return ERR_RST;
+
     tcp = hev_socks5_session_tcp_new (pcb, &mutex);
     if (!tcp)
         return ERR_MEM;
@@ -171,6 +175,11 @@ udp_recv_handler (void *arg, struct udp_pcb *pcb, struct pbuf *p,
     HevListNode *node;
     int stack_size;
     HevTask *task;
+
+    if (!run) {
+        udp_remove (pcb);
+        return;
+    }
 
     udp = hev_socks5_session_udp_new (pcb, &mutex);
     if (!udp) {
@@ -205,9 +214,6 @@ event_task_entry (void *data)
     hev_task_io_read (event_fds[0], &val, sizeof (val), NULL, NULL);
 
     run = 0;
-    hev_task_join (task_lwip_io);
-    hev_task_join (task_lwip_timer);
-
     node = hev_list_first (&session_set);
     for (; node; node = hev_list_node_next (node)) {
         HevSocks5SessionData *sd;
@@ -216,6 +222,8 @@ event_task_entry (void *data)
         hev_socks5_session_terminate (sd->self);
     }
 
+    hev_task_join (task_lwip_io);
+    hev_task_join (task_lwip_timer);
     hev_task_del_fd (task_event, event_fds[0]);
 }
 
@@ -270,14 +278,7 @@ lwip_timer_task_entry (void *data)
 
     LOG_D ("socks5 tunnel timer task run");
 
-    for (i = 1;; i++) {
-        if (hev_list_first (&session_set))
-            hev_task_sleep (TCP_TMR_INTERVAL);
-        else
-            hev_task_yield (HEV_TASK_WAITIO);
-        if (!run)
-            break;
-
+    for (i = 1; run; i++) {
         hev_task_mutex_lock (&mutex);
         tcp_tmr ();
 
@@ -293,6 +294,11 @@ lwip_timer_task_entry (void *data)
 #endif
         }
         hev_task_mutex_unlock (&mutex);
+
+        if (hev_list_first (&session_set))
+            hev_task_sleep (TCP_TMR_INTERVAL);
+        else
+            hev_task_yield (HEV_TASK_WAITIO);
     }
 }
 
@@ -304,6 +310,14 @@ tunnel_init (int extern_tun_fd)
     unsigned int mtu;
 
     if (extern_tun_fd >= 0) {
+        int nonblock = 1;
+
+        res = ioctl (extern_tun_fd, FIONBIO, (char *)&nonblock);
+        if (res < 0) {
+            LOG_E ("socks5 tunnel non-blocking");
+            return -1;
+        }
+
         tun_fd = extern_tun_fd;
         return 0;
     }
@@ -368,6 +382,7 @@ tunnel_fini (void)
         hev_exec_run (script_path, hev_tunnel_get_name (), 1);
 
     hev_tunnel_close (tun_fd);
+    tun_fd_local = 0;
     tun_fd = -1;
 }
 
@@ -417,11 +432,18 @@ gateway_fini (void)
 static int
 event_task_init (void)
 {
+    int nonblock = 1;
     int res;
 
-    res = hev_task_io_pipe_pipe (event_fds);
+    res = pipe (event_fds);
     if (res < 0) {
         LOG_E ("socks5 tunnel pipe");
+        return -1;
+    }
+
+    res = ioctl (event_fds[0], FIONBIO, (char *)&nonblock);
+    if (res < 0) {
+        LOG_E ("socks5 tunnel pipe nonblock");
         return -1;
     }
 
@@ -574,16 +596,21 @@ hev_socks5_tunnel_run (void)
 void
 hev_socks5_tunnel_stop (void)
 {
-    int val;
+    int res;
+    int fd;
 
     LOG_D ("socks5 tunnel stop");
 
-    if (event_fds[1] == -1)
-        return;
+    for (;;) {
+        fd = READ_ONCE (event_fds[1]);
+        if (fd >= 0)
+            break;
+        /* Wait for async initialization */
+        usleep (100 * 1000);
+    }
 
-    val = write (event_fds[1], &val, sizeof (val));
-    if (val < 0)
-        LOG_E ("socks5 tunnel write event");
+    res = write (fd, &res, 1);
+    assert (res > 0 && "socks5 tunnel write event");
 }
 
 void

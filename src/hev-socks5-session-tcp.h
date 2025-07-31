@@ -10,6 +10,7 @@
 #ifndef __HEV_SOCKS5_SESSION_TCP_H__
 #define __HEV_SOCKS5_SESSION_TCP_H__
 
+#include <stdbool.h>
 #include <hev-ring-buffer.h>
 #include <hev-socks5-client-tcp.h>
 
@@ -32,7 +33,9 @@ struct _HevSocks5SessionTCP
     struct tcp_pcb *pcb;
     HevTaskMutex *mutex;
     HevRingBuffer *buffer;
+    HevTask *timeout_task;
     int pcb_eof;
+    bool half_close_timed_out;
 };
 
 struct _HevSocks5SessionTCPClass

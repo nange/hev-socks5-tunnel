@@ -28,6 +28,19 @@
 
 #define task_io_yielder hev_socks5_task_io_yielder
 
+static void
+half_close_timeout_task_entry (void *data)
+{
+    HevSocks5SessionTCP *self = data;
+
+    if (hev_task_sleep (5000) == 0) {
+        if (!self->half_close_timed_out)
+            hev_socks5_session_terminate (HEV_SOCKS5_SESSION (self));
+    }
+
+    self->timeout_task = NULL;
+}
+
 static int
 tcp_splice_f (HevSocks5SessionTCP *self)
 {
@@ -130,6 +143,10 @@ tcp_recv_handler (void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
         }
     } else {
         self->pcb_eof = 1;
+        if (!self->timeout_task) {
+            self->timeout_task = hev_task_new (-1);
+            hev_task_run (self->timeout_task, half_close_timeout_task_entry, self);
+        }
     }
 
     hev_task_wakeup (self->data.task);
@@ -244,6 +261,12 @@ hev_socks5_session_tcp_splice (HevSocks5Session *base)
         if (task_io_yielder (HEV_TASK_WAITIO, base) < 0)
             break;
     }
+
+    if (self->timeout_task) {
+        self->half_close_timed_out = true;
+        hev_task_wakeup (self->timeout_task);
+        hev_task_join (self->timeout_task);
+    }
 }
 
 static HevTask *
@@ -319,6 +342,12 @@ hev_socks5_session_tcp_destruct (HevObject *base)
     if (self->queue)
         pbuf_free (self->queue);
     hev_task_mutex_unlock (self->mutex);
+
+    if (self->timeout_task) {
+        self->half_close_timed_out = true;
+        hev_task_wakeup (self->timeout_task);
+        hev_task_join (self->timeout_task);
+    }
 
     HEV_SOCKS5_CLIENT_TCP_TYPE->destruct (base);
 }

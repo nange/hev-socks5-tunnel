@@ -48,7 +48,7 @@ hev_socks5_session_run (HevSocks5Session *self)
         if (udp->pcb->local_port == 53) {
             hev_socks5_set_timeout (HEV_SOCKS5 (self), 10000);
         } else {
-            int timeout = hev_config_get_misc_udp_timeout ();
+            int timeout = hev_config_get_misc_read_write_timeout ();
             hev_socks5_set_timeout (HEV_SOCKS5 (self), timeout);
         }
     }

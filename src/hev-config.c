@@ -41,7 +41,6 @@ static int task_stack_size = 86016;
 static int tcp_buffer_size = 65536;
 static int connect_timeout = 5000;
 static int read_write_timeout = 60000;
-static int udp_timeout = 10000;
 static int limit_nofile = 65535;
 static int log_level = HEV_LOGGER_WARN;
 
@@ -343,8 +342,6 @@ hev_config_parse_misc (yaml_document_t *doc, yaml_node_t *base)
             connect_timeout = strtoul (value, NULL, 10);
         else if (0 == strcmp (key, "read-write-timeout"))
             read_write_timeout = strtoul (value, NULL, 10);
-        else if (0 == strcmp (key, "udp-timeout"))
-            udp_timeout = strtoul (value, NULL, 10);
         else if (0 == strcmp (key, "pid-file"))
             strncpy (pid_file, value, 1024 - 1);
         else if (0 == strcmp (key, "log-file"))
@@ -588,12 +585,6 @@ int
 hev_config_get_misc_read_write_timeout (void)
 {
     return read_write_timeout;
-}
-
-int
-hev_config_get_misc_udp_timeout (void)
-{
-    return udp_timeout;
 }
 
 int

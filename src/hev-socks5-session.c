@@ -11,9 +11,12 @@
 
 #include "hev-logger.h"
 #include "hev-config.h"
-#include "hev-socks5-client.h"
+#include <lwip/udp.h>
 
+#include "hev-socks5.h"
+#include "hev-socks5-client.h"
 #include "hev-socks5-session.h"
+#include "hev-socks5-session-udp.h"
 
 void
 hev_socks5_session_run (HevSocks5Session *self)
@@ -40,6 +43,14 @@ hev_socks5_session_run (HevSocks5Session *self)
     }
 
     hev_socks5_set_timeout (HEV_SOCKS5 (self), read_write_timeout);
+
+    if (HEV_SOCKS5 (self)->type == HEV_SOCKS5_TYPE_UDP_IN_UDP) {
+        HevSocks5SessionUDP *udp = HEV_SOCKS5_SESSION_UDP (self);
+        if (udp->pcb->local_port == 53) {
+            // set dns session timeout to 10s
+            hev_socks5_set_timeout (HEV_SOCKS5 (self), 10000);
+        }
+    }
 
     if (srv->user && srv->pass) {
         hev_socks5_client_set_auth (HEV_SOCKS5_CLIENT (self), srv->user,

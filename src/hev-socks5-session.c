@@ -47,8 +47,8 @@ hev_socks5_session_run (HevSocks5Session *self)
     if (HEV_SOCKS5 (self)->type != HEV_SOCKS5_TYPE_TCP) {
         HevSocks5SessionUDP *udp = HEV_SOCKS5_SESSION_UDP (self);
         if (udp->pcb->local_port == 53) {
-            // set dns session timeout to 10s
-            hev_socks5_set_timeout (HEV_SOCKS5 (self), 10000);
+            // set dns session timeout to 5s
+            hev_socks5_set_timeout (HEV_SOCKS5 (self), 5000);
         }
     }
 

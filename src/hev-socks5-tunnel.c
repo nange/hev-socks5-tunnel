@@ -32,6 +32,8 @@
 #include "hev-config.h"
 #include "hev-logger.h"
 #include "hev-tunnel.h"
+#include <arpa/inet.h>
+
 #include "hev-compiler.h"
 #include "hev-mapped-dns.h"
 #include "hev-config-const.h"
@@ -139,6 +141,12 @@ tcp_accept_handler (void *arg, struct tcp_pcb *pcb, err_t err)
     if (!tcp)
         return ERR_MEM;
 
+    if (pcb->local_port == 53) {
+        int timeout = hev_config_get_misc_dns_timeout ();
+        if (timeout > 0)
+            hev_socks5_set_timeout (HEV_SOCKS5 (tcp), timeout);
+    }
+
     stack_size = hev_config_get_misc_task_stack_size ();
     task = hev_task_new (stack_size);
     if (!task) {
@@ -214,6 +222,15 @@ udp_recv_handler (void *arg, struct udp_pcb *pcb, struct pbuf *p,
     if (!udp) {
         udp_remove (pcb);
         return;
+    }
+
+    if (pcb->local_port == 53 && p->len >= sizeof (DNSHdr)) {
+        const DNSHdr *hdr = (const DNSHdr *)p->payload;
+        if (!(ntohs (hdr->fl) & 0x8000)) {
+            int timeout = hev_config_get_misc_dns_timeout ();
+            if (timeout > 0)
+                hev_socks5_set_timeout (HEV_SOCKS5 (udp), timeout);
+        }
     }
 
     stack_size = hev_config_get_misc_task_stack_size ();

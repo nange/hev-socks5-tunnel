@@ -18,6 +18,18 @@
 extern "C" {
 #endif
 
+typedef struct _DNSHdr DNSHdr;
+
+struct _DNSHdr
+{
+    uint16_t id;
+    uint16_t fl;
+    uint16_t qd;
+    uint16_t an;
+    uint16_t ns;
+    uint16_t ar;
+};
+
 #define HEV_MAPPED_DNS(p) ((HevMappedDNS *)p)
 #define HEV_MAPPED_DNS_CLASS(p) ((HevMappedDNSClass *)p)
 #define HEV_MAPPED_DNS_TYPE (hev_mapped_dns_class ())

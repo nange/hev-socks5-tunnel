@@ -41,6 +41,7 @@ static int task_stack_size = 86016;
 static int tcp_buffer_size = 65536;
 static int connect_timeout = 5000;
 static int read_write_timeout = 60000;
+static int dns_timeout = 5000;
 static int limit_nofile = 65535;
 static int log_level = HEV_LOGGER_WARN;
 
@@ -342,6 +343,8 @@ hev_config_parse_misc (yaml_document_t *doc, yaml_node_t *base)
             connect_timeout = strtoul (value, NULL, 10);
         else if (0 == strcmp (key, "read-write-timeout"))
             read_write_timeout = strtoul (value, NULL, 10);
+        else if (0 == strcmp (key, "dns-timeout"))
+            dns_timeout = strtoul (value, NULL, 10);
         else if (0 == strcmp (key, "pid-file"))
             strncpy (pid_file, value, 1024 - 1);
         else if (0 == strcmp (key, "log-file"))
@@ -403,6 +406,12 @@ hev_config_parse_doc (yaml_document_t *doc)
         task_stack_size = min_task_stack_size;
 
     return 0;
+}
+
+int
+hev_config_get_misc_dns_timeout (void)
+{
+    return dns_timeout;
 }
 
 int

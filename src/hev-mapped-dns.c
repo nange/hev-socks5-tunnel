@@ -21,18 +21,6 @@
 
 static HevMappedDNS *singleton;
 
-typedef struct _DNSHdr DNSHdr;
-
-struct _DNSHdr
-{
-    uint16_t id;
-    uint16_t fl;
-    uint16_t qd;
-    uint16_t an;
-    uint16_t ns;
-    uint16_t ar;
-};
-
 struct _HevMappedDNSNode
 {
     HevRBTreeNode tree;

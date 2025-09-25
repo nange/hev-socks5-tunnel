@@ -32,8 +32,6 @@
 #include "hev-config.h"
 #include "hev-logger.h"
 #include "hev-tunnel.h"
-#include <arpa/inet.h>
-
 #include "hev-compiler.h"
 #include "hev-mapped-dns.h"
 #include "hev-config-const.h"
@@ -141,10 +139,16 @@ tcp_accept_handler (void *arg, struct tcp_pcb *pcb, err_t err)
     if (!tcp)
         return ERR_MEM;
 
-    if (pcb->local_port == 53) {
-        int timeout = hev_config_get_misc_dns_timeout ();
-        if (timeout > 0)
-            hev_socks5_set_timeout (HEV_SOCKS5 (tcp), timeout);
+    HevConfigDNS *dns = hev_config_get_dns ();
+    if (dns && (dns->port == pcb->local_port)) {
+        const ip_addr_t *addr = &pcb->local_ip;
+        char buf[256];
+
+        ipaddr_ntoa_r (addr, buf, sizeof (buf));
+        if (strcmp (buf, dns->server) == 0) {
+            if (dns->timeout > 0)
+                hev_socks5_set_timeout (HEV_SOCKS5 (tcp), dns->timeout);
+        }
     }
 
     stack_size = hev_config_get_misc_task_stack_size ();
@@ -224,12 +228,15 @@ udp_recv_handler (void *arg, struct udp_pcb *pcb, struct pbuf *p,
         return;
     }
 
-    if (pcb->local_port == 53 && p->len >= sizeof (DNSHdr)) {
-        const DNSHdr *hdr = (const DNSHdr *)p->payload;
-        if (!(ntohs (hdr->fl) & 0x8000)) {
-            int timeout = hev_config_get_misc_dns_timeout ();
-            if (timeout > 0)
-                hev_socks5_set_timeout (HEV_SOCKS5 (udp), timeout);
+    HevConfigDNS *conf_dns = hev_config_get_dns ();
+    if (conf_dns && (conf_dns->port == pcb->local_port)) {
+        const ip_addr_t *dest_addr = &pcb->local_ip;
+        char buf[256];
+
+        ipaddr_ntoa_r (dest_addr, buf, sizeof (buf));
+        if (strcmp (buf, conf_dns->server) == 0) {
+            if (conf_dns->timeout > 0)
+                hev_socks5_set_timeout (HEV_SOCKS5 (udp), conf_dns->timeout);
         }
     }
 

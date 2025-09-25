@@ -46,11 +46,21 @@ int hev_config_get_mapdns_network (void);
 int hev_config_get_mapdns_netmask (void);
 int hev_config_get_mapdns_cache_size (void);
 
+typedef struct _HevConfigDNS HevConfigDNS;
+
+struct _HevConfigDNS
+{
+    char server[256];
+    unsigned short port;
+    int timeout;
+};
+
+HevConfigDNS *hev_config_get_dns (void);
+
 int hev_config_get_misc_task_stack_size (void);
 int hev_config_get_misc_tcp_buffer_size (void);
 int hev_config_get_misc_connect_timeout (void);
 int hev_config_get_misc_read_write_timeout (void);
-int hev_config_get_misc_dns_timeout (void);
 int hev_config_get_misc_limit_nofile (void);
 const char *hev_config_get_misc_pid_file (void);
 const char *hev_config_get_misc_log_file (void);

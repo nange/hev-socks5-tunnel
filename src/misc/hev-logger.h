@@ -10,6 +10,8 @@
 #ifndef __HEV_LOGGER_H__
 #define __HEV_LOGGER_H__
 
+#include <stdarg.h>
+
 #define LOG_D(fmt...) hev_logger_log (HEV_LOGGER_DEBUG, fmt)
 #define LOG_I(fmt...) hev_logger_log (HEV_LOGGER_INFO, fmt)
 #define LOG_W(fmt...) hev_logger_log (HEV_LOGGER_WARN, fmt)

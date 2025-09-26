@@ -7,16 +7,60 @@
  ============================================================================
  */
 
+#include "hev-logger.h"
+
+#ifdef __ANDROID__
+#include <android/log.h>
+
+static HevLoggerLevel req_level;
+
+int
+hev_logger_init (HevLoggerLevel level, const char *path)
+{
+    req_level = level;
+    return 0;
+}
+
+void
+hev_logger_fini (void)
+{
+}
+
+int
+hev_logger_enabled (HevLoggerLevel level)
+{
+    if (level >= req_level)
+        return 1;
+
+    return 0;
+}
+
+void
+hev_logger_log (HevLoggerLevel level, const char *fmt, ...)
+{
+    android_LogPriority P[] = {
+        [HEV_LOGGER_DEBUG] = ANDROID_LOG_DEBUG,
+        [HEV_LOGGER_INFO] = ANDROID_LOG_INFO,
+        [HEV_LOGGER_WARN] = ANDROID_LOG_WARN,
+        [HEV_LOGGER_ERROR] = ANDROID_LOG_ERROR,
+    };
+    va_list ap;
+
+    if (level < req_level)
+        return;
+
+    va_start (ap, fmt);
+    __android_log_vprint (P[level], "hev-socks5-tunnel", fmt, ap);
+    va_end (ap);
+}
+#else
 #include <time.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/uio.h>
 #include <sys/stat.h>
-
-#include "hev-logger.h"
 
 static int fd = -1;
 static HevLoggerLevel req_level;
@@ -110,3 +154,4 @@ hev_logger_log (HevLoggerLevel level, const char *fmt, ...)
         /* ignore return value */
     }
 }
+#endif

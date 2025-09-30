@@ -35,6 +35,8 @@ static int mapdns_network;
 static int mapdns_netmask;
 static int mapdns_cache_size;
 
+static HevConfigDNS dns;
+
 static char log_file[1024];
 static char pid_file[1024];
 static int task_stack_size = 86016;
@@ -72,6 +74,45 @@ hev_config_parse_tunnel_ipv4 (yaml_document_t *doc, yaml_node_t *base)
 
         if (0 == strcmp (key, "address"))
             strncpy (tun_ipv4_address, value, 16 - 1);
+    }
+
+    return 0;
+}
+
+static int
+hev_config_parse_dns (yaml_document_t *doc, yaml_node_t *base)
+{
+    yaml_node_pair_t *pair;
+
+    if (!base || YAML_MAPPING_NODE != base->type)
+        return -1;
+
+    dns.timeout = 5000;
+    for (pair = base->data.mapping.pairs.start;
+         pair < base->data.mapping.pairs.top; pair++) {
+        yaml_node_t *node;
+        const char *key, *value;
+
+        if (!pair->key || !pair->value)
+            break;
+
+        node = yaml_document_get_node (doc, pair->key);
+        if (!node || YAML_SCALAR_NODE != node->type)
+            break;
+        key = (const char *)node->data.scalar.value;
+
+        node = yaml_document_get_node (doc, pair->value);
+        if (!node || YAML_SCALAR_NODE != node->type)
+            break;
+        value = (const char *)node->data.scalar.value;
+
+        if (0 == strcmp (key, "server")) {
+            strncpy (dns.server, value, 256 - 1);
+        } else if (0 == strcmp (key, "port")) {
+            dns.port = strtoul (value, NULL, 10);
+        } else if (0 == strcmp (key, "timeout")) {
+            dns.timeout = strtoul (value, NULL, 10);
+        }
     }
 
     return 0;
@@ -394,6 +435,8 @@ hev_config_parse_doc (yaml_document_t *doc)
             res = hev_config_parse_socks5 (doc, node);
         else if (0 == strcmp (key, "mapdns"))
             res = hev_config_parse_mapdns (doc, node);
+        else if (0 == strcmp (key, "dns"))
+            res = hev_config_parse_dns (doc, node);
         else if (0 == strcmp (key, "misc"))
             res = hev_config_parse_misc (doc, node);
 
@@ -567,6 +610,15 @@ int
 hev_config_get_mapdns_cache_size (void)
 {
     return mapdns_cache_size;
+}
+
+HevConfigDNS *
+hev_config_get_dns (void)
+{
+    if (!dns.server[0])
+        return NULL;
+
+    return &dns;
 }
 
 int

@@ -139,6 +139,36 @@ tcp_accept_handler (void *arg, struct tcp_pcb *pcb, err_t err)
     if (!tcp)
         return ERR_MEM;
 
+    HevConfigDNS *dns = hev_config_get_dns ();
+    LOG_D ("[dns-tcp] LOG_ON_I=%d LOG_ON_D=%d", LOG_ON_I (), LOG_ON_D ());
+    if (!dns) {
+        LOG_D ("[dns-tcp] conf_dns is NULL");
+    } else {
+        LOG_D ("[dns-tcp] conf_dns: server=%s port=%d timeout_ms=%d", dns->server, dns->port, dns->timeout);
+        LOG_D ("[dns-tcp] pcb->local_port=%d", pcb->local_port);
+        LOG_D ("[dns-tcp] pcb->remote_port=%d", pcb->remote_port);
+    }
+    if (dns && (dns->port == pcb->local_port)) {
+        const ip_addr_t *addr = &pcb->local_ip;
+        char buf[256];
+
+        LOG_D ("[dns-tcp] pcb->local_ip type=%d", addr->type);
+        ipaddr_ntoa_r (addr, buf, sizeof (buf));
+        LOG_D ("[dns-tcp] compare local_ip=%s with dns->server=%s", buf, dns->server);
+        if (strcmp (buf, dns->server) == 0) {
+            LOG_D ("[dns-tcp] server matched");
+            if (dns->timeout > 0)
+                LOG_I ("set dns timeout to %f sec", dns->timeout/1000);
+            else
+                LOG_D ("[dns-tcp] timeout <= 0, value=%d", dns->timeout);
+            hev_socks5_set_timeout (HEV_SOCKS5 (tcp), dns->timeout);
+        } else {
+            LOG_D ("[dns-tcp] server not matched: local_ip=%s, expected=%s", buf, dns->server);
+        }
+    } else {
+        LOG_D ("[dns-tcp] skip set timeout: dns=%p port=%d local_port=%d", dns, dns ? dns->port : -1, pcb->local_port);
+    }
+
     stack_size = hev_config_get_misc_task_stack_size ();
     task = hev_task_new (stack_size);
     if (!task) {
@@ -214,6 +244,36 @@ udp_recv_handler (void *arg, struct udp_pcb *pcb, struct pbuf *p,
     if (!udp) {
         udp_remove (pcb);
         return;
+    }
+
+    HevConfigDNS *conf_dns = hev_config_get_dns ();
+    LOG_I ("[dns-udp] LOG_ON_I=%d LOG_ON_D=%d", LOG_ON_I (), LOG_ON_D ());
+    if (!conf_dns) {
+        LOG_I ("[dns-udp] conf_dns is NULL");
+    } else {
+        LOG_I ("[dns-udp] conf_dns: server=%s port=%d timeout_ms=%d", conf_dns->server, conf_dns->port, conf_dns->timeout);
+        LOG_I ("[dns-udp] pcb->local_port=%d", pcb->local_port);
+        LOG_I ("[dns-udp] recv src port=%d", port);
+    }
+    if (conf_dns && (conf_dns->port == port)) {
+        const ip_addr_t *dest_addr = addr;
+        char buf[256];
+
+        LOG_I ("[dns-udp] pcb->local_ip type=%d", dest_addr->type);
+        ipaddr_ntoa_r (dest_addr, buf, sizeof (buf));
+        LOG_I ("[dns-udp] compare local_ip=%s with dns->server=%s", buf, conf_dns->server);
+        if (strcmp (buf, conf_dns->server) == 0) {
+            LOG_I ("[dns-udp] server matched");
+            if (conf_dns->timeout > 0)
+                LOG_I ("[dns-udp] set dns timeout to %d ms", conf_dns->timeout);
+            else
+                LOG_I ("[dns-udp] timeout <= 0, value=%d", conf_dns->timeout);
+            hev_socks5_set_timeout (HEV_SOCKS5 (udp), conf_dns->timeout);
+        } else {
+            LOG_I ("[dns-udp] server not matched: local_ip=%s, expected=%s", buf, conf_dns->server);
+        }
+    } else {
+        LOG_I ("[dns-udp] skip set timeout: dns=%p port=%d local_port=%d", conf_dns, conf_dns ? conf_dns->port : -1, pcb->local_port);
     }
 
     stack_size = hev_config_get_misc_task_stack_size ();

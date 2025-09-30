@@ -46,6 +46,14 @@ socks5:
   # Mapped DNS cache size
 # cache-size: 10000
 
+#dns:
+  # DNS server address
+  # server: 8.8.8.8
+  # DNS server port
+  # port: 53
+  # DNS timeout (ms)
+  # timeout: 5000
+
 #misc:
   # task stack size (bytes)
 # task-stack-size: 86016

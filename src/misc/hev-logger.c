@@ -12,6 +12,8 @@
 #ifdef __ANDROID__
 #include <android/log.h>
 
+#define LOG_CAT_TAG "hev-socks5-tunnel"
+
 static HevLoggerLevel req_level;
 
 int

@@ -75,7 +75,7 @@ task_io_yielder (HevTaskYieldType type, void *data)
 {
     hev_task_yield (type);
 
-    return run ? 0 : -1;
+    return READ_ONCE (run) ? 0 : -1;
 }
 
 static err_t
@@ -180,7 +180,7 @@ tcp_accept_handler (void *arg, struct tcp_pcb *pcb, err_t err)
     if (err != ERR_OK)
         return err;
 
-    if (!run)
+    if (!READ_ONCE (run))
         return ERR_RST;
 
     tcp = hev_socks5_session_tcp_new (pcb, &mutex);
@@ -243,7 +243,7 @@ udp_recv_handler (void *arg, struct udp_pcb *pcb, struct pbuf *p,
     int stack_size;
     HevTask *task;
 
-    if (!run) {
+    if (!READ_ONCE (run)) {
         udp_remove (pcb);
         return;
     }
@@ -290,7 +290,7 @@ event_task_entry (void *data)
 
     hev_task_io_read (event_fds[0], &val, sizeof (val), NULL, NULL);
 
-    run = 0;
+    WRITE_ONCE (run, 0);
     atomic_fetch_and (&tsync, ~SYNC_SENT);
 
     node = hev_list_first (&session_set);
@@ -315,7 +315,7 @@ lwip_io_task_entry (void *data)
 
     hev_tunnel_add_task (tun_fd, task_lwip_io);
 
-    for (; run;) {
+    for (; READ_ONCE (run);) {
         struct pbuf *buf;
 
         buf = hev_tunnel_read (tun_fd, mtu, task_io_yielder, NULL);
@@ -341,7 +341,7 @@ lwip_timer_task_entry (void *data)
 
     LOG_D ("socks5 tunnel timer task run");
 
-    for (i = 1; run; i++) {
+    for (i = 1; READ_ONCE (run); i++) {
         hev_task_mutex_lock (&mutex);
         tcp_tmr ();
 
@@ -734,7 +734,7 @@ hev_socks5_tunnel_run (void)
     task_lwip_timer = hev_task_ref (task_lwip_timer);
     hev_task_run (task_lwip_timer, lwip_timer_task_entry, NULL);
 
-    run = 1;
+    WRITE_ONCE (run, 1);
     hev_task_system_run ();
 
     return 0;

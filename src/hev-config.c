@@ -63,7 +63,7 @@ hev_config_parse_tunnel_ipv4 (yaml_document_t *doc, yaml_node_t *base)
         const char *key, *value;
 
         if (!pair->key || !pair->value)
-            break;
+            continue;
 
         node = yaml_document_get_node (doc, pair->key);
         if (!node || YAML_SCALAR_NODE != node->type)
@@ -96,7 +96,7 @@ hev_config_parse_tunnel_ipv6 (yaml_document_t *doc, yaml_node_t *base)
         const char *key, *value;
 
         if (!pair->key || !pair->value)
-            break;
+            continue;
 
         node = yaml_document_get_node (doc, pair->key);
         if (!node || YAML_SCALAR_NODE != node->type)
@@ -129,7 +129,7 @@ hev_config_parse_tunnel (yaml_document_t *doc, yaml_node_t *base)
         const char *key;
 
         if (!pair->key || !pair->value)
-            break;
+            continue;
 
         node = yaml_document_get_node (doc, pair->key);
         if (!node || YAML_SCALAR_NODE != node->type)
@@ -195,7 +195,7 @@ hev_config_parse_socks5 (yaml_document_t *doc, yaml_node_t *base)
         const char *key, *value;
 
         if (!pair->key || !pair->value)
-            break;
+            continue;
 
         node = yaml_document_get_node (doc, pair->key);
         if (!node || YAML_SCALAR_NODE != node->type)
@@ -284,7 +284,7 @@ hev_config_parse_mapdns (yaml_document_t *doc, yaml_node_t *base)
         const char *key, *value;
 
         if (!pair->key || !pair->value)
-            break;
+            continue;
 
         node = yaml_document_get_node (doc, pair->key);
         if (!node || YAML_SCALAR_NODE != node->type)
@@ -344,7 +344,7 @@ hev_config_parse_misc (yaml_document_t *doc, yaml_node_t *base)
         const char *key, *value;
 
         if (!pair->key || !pair->value)
-            break;
+            continue;
 
         node = yaml_document_get_node (doc, pair->key);
         if (!node || YAML_SCALAR_NODE != node->type)
@@ -416,7 +416,7 @@ hev_config_parse_doc (yaml_document_t *doc)
         int res = 0;
 
         if (!pair->key || !pair->value)
-            break;
+            continue;
 
         node = yaml_document_get_node (doc, pair->key);
         if (!node || YAML_SCALAR_NODE != node->type)

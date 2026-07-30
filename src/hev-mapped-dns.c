@@ -242,8 +242,7 @@ hev_mapped_dns_handle (HevMappedDNS *self, void *req, int qlen, void *res,
         if ((off + 15) >= slen)
             return -1;
 
-        sb[off + 0] = 0xc0;
-        sb[off + 1] = ipo[i];
+        write_u16 (&sb[off + 0], 0xc000 | ipo[i]);
         write_u16 (&sb[off + 2], 1);
         write_u16 (&sb[off + 4], 1);
         write_u32 (&sb[off + 6], 1);

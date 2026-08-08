@@ -8,6 +8,7 @@
  */
 
 #include <errno.h>
+#include <assert.h>
 #include <signal.h>
 #include <string.h>
 #include <stdatomic.h>
@@ -756,8 +757,10 @@ retry:
 
     if (res & SYNC_SEND) {
         res = atomic_fetch_or (&tsync, SYNC_SENT);
-        if (!(res & SYNC_SENT))
-            write (event_fds[1], &res, 1);
+        if (!(res & SYNC_SENT)) {
+            res = write (event_fds[1], &res, 1);
+            assert (res > 0 && "socks5 tunnel write event");
+        }
     } else {
         atomic_fetch_or (&tsync, SYNC_STOP);
     }

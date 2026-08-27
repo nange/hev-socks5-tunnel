@@ -46,6 +46,10 @@ hev_tunnel_open (const char *name, int multi_queue)
     if (res < 0)
         goto fail_close;
 
+    res = ioctl (fd, TUNSIFHEAD, &one);
+    if (res < 0)
+        goto fail_close;
+
     strncpy (tun_name, name, IFNAMSIZ - 1);
     return fd;
 

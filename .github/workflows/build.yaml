@@ -256,9 +256,12 @@ jobs:
       - name: Build android-aar
         run: |
           ./android-ndk-r27d/ndk-build clean
-          ./android-ndk-r27d/ndk-build APP_MODULES=hev-socks5-tunnel NDK_APPLICATION_MK=$PWD/Application.mk.aar -j$(nproc)
-          mkdir -p aar/jni/arm64-v8a
-          cp libs/arm64-v8a/libhev-socks5-tunnel.so aar/jni/arm64-v8a/
+          ./android-ndk-r27d/ndk-build APP_MODULES=hev-socks5-tunnel -j$(nproc)
+          mkdir -p aar/jni
+          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+            mkdir -p aar/jni/$abi
+            cp libs/$abi/libhev-socks5-tunnel.so aar/jni/$abi/
+          done
           cat > aar/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="hev.socks5.tunnel">

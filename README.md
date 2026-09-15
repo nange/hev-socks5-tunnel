@@ -403,30 +403,32 @@ Allow overriding the package and class names in `Application.mk`[^2].
 APP_CFLAGS := -DPKGNAME=hev/sockstun -DCLSNAME=TProxyService
 ```
 
-### Prebuilt Android AAR (fixed contract)
+### Prebuilt Android AAR (self-contained)
 
 AAR artifacts published in [releases](https://github.com/nange/hev-socks5-tunnel/releases)
 are built with the default JNI contract (no `PKGNAME`/`CLSNAME` overrides), so their natives
-register to `hev.htproxy.TProxyService`. The AAR is generic — instead of rebuilding it per
-consumer package, add a small shim class in your app:
+register to `hev.htproxy.TProxyService`. Since `2.17.1.2` the binding class below is bundled
+in the AAR itself (`classes.jar`, plus a `proguard.txt` that keeps it), so consuming apps call
+it directly instead of adding a shim class:
 
-```kotlin
-// app/src/main/java/hev/htproxy/TProxyService.kt
-package hev.htproxy
+```java
+package hev.htproxy;
 
-object TProxyService {
-    external fun TProxyStartService(config_path: String, fd: Int): Boolean
-    external fun TProxyStopService(): Boolean
-    external fun TProxyIsRunning(): Boolean
-    external fun TProxyGetStats(): LongArray
+public final class TProxyService {
+    public static native boolean TProxyStartService(String config_path, int fd);
+    public static native boolean TProxyStopService();
+    public static native boolean TProxyIsRunning();
+    public static native long[] TProxyGetStats();
 
-    init {
-        System.loadLibrary("hev-socks5-tunnel")
+    static {
+        System.loadLibrary("hev-socks5-tunnel");
     }
 }
 ```
 
-Then call these methods from your own code; no per-package rebuild is required.
+Then call these methods from your own code; no per-package rebuild is required. Releases up to
+`2.17.1.1` shipped the native libraries only, so they required that class to be added to the
+app by hand.
 
 ## Use Cases
 
